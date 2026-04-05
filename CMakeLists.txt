@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(polytoria CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 
-if(NOT EXISTS "${CMAKE_SOURCE_DIR}/vendor/vm/src/sandbox.c")
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/vendor/vm/src")
     message(STATUS "vm not found, cloning...")
     execute_process(
             COMMAND git clone https://github.com/ApaxPhoenix/vm.git
@@ -18,19 +18,19 @@ endif()
 add_subdirectory(vendor/vm)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
+file(GLOB_RECURSE HEADERS "include/*.hpp")
 
-add_executable(polytoria ${SOURCES})
+add_executable(polytoria ${SOURCES} ${HEADERS})
 
-add_custom_command(TARGET polytoria POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/vendor/vm/scripts
-        $<TARGET_FILE_DIR:polytoria>/scripts
+target_compile_definitions(vm PRIVATE
+        INIT_LUA_PATH="${CMAKE_SOURCE_DIR}/vendor/vm/init.lua"
 )
 
 target_include_directories(polytoria PRIVATE
         include
         vendor/vm/include
-        "${CMAKE_BINARY_DIR}/vendor/vm/luajit_install/include/luajit-2.1"
+        vendor/vm/src
+        vendor/vm/luajit_install/include/luajit-2.1
 )
 
 target_link_libraries(polytoria PRIVATE vm)

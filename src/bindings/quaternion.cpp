@@ -1,7 +1,6 @@
-#include "bindings/quaternion.hpp"
+#include "bindings.hpp"
 #include "quaternion.hpp"
-#include <sstream>
-#include <cstring>
+#include <cassert>
 
 extern "C" {
 #include <lua.h>
@@ -12,142 +11,234 @@ static Quaternion *check(lua_State *state, const int index) {
     return static_cast<Quaternion *>(luaL_checkudata(state, index, "Quaternion"));
 }
 
-static void push(lua_State *state, const Quaternion &quaternion) {
-    auto *data = static_cast<Quaternion *>(lua_newuserdata(state, sizeof(Quaternion)));
-    *data = quaternion;
-    luaL_getmetatable(state, "Quaternion");
-    lua_setmetatable(state, -2);
+static Quaternion *push(lua_State *state) {
+    auto *quaternion = static_cast<Quaternion *>(lua_newuserdata(state, sizeof(Quaternion)));
+    luaL_setmetatable(state, "Quaternion");
+    return quaternion;
 }
 
-static Vector3 *checkVector3(lua_State *state, const int index) {
-    return static_cast<Vector3 *>(luaL_checkudata(state, index, "Vector3"));
-}
-
-static void pushVector3(lua_State *state, const Vector3 &vector) {
-    auto *data = static_cast<Vector3 *>(lua_newuserdata(state, sizeof(Vector3)));
-    *data = vector;
-    luaL_getmetatable(state, "Vector3");
-    lua_setmetatable(state, -2);
-}
-
-static int quaternion_new(lua_State *state) {
-    push(state, Quaternion(
-        static_cast<float>(luaL_checknumber(state, 1)),
-        static_cast<float>(luaL_checknumber(state, 2)),
-        static_cast<float>(luaL_checknumber(state, 3)),
-        static_cast<float>(luaL_checknumber(state, 4))
-    ));
+// Quaternion.new(x, y, z, w)
+// Quaternion.new() -- defaults to identity (0, 0, 0, 1)
+static int new_(lua_State *state) {
+    const auto x = static_cast<float>(luaL_optnumber(state, 1, 0.0));
+    const auto y = static_cast<float>(luaL_optnumber(state, 2, 0.0));
+    const auto z = static_cast<float>(luaL_optnumber(state, 3, 0.0));
+    const auto w = static_cast<float>(luaL_optnumber(state, 4, 1.0));
+    *push(state) = Quaternion(x, y, z, w);
     return 1;
 }
 
-static int quaternion_index(lua_State *state) {
+// Quaternion.euler(pitch, yaw, roll) -- degrees
+static int from_euler(lua_State *state) {
+    const auto x = static_cast<float>(luaL_checknumber(state, 1));
+    const auto y = static_cast<float>(luaL_checknumber(state, 2));
+    const auto z = static_cast<float>(luaL_checknumber(state, 3));
+    *push(state) = Quaternion::euler({x, y, z});
+    return 1;
+}
+
+// Quaternion.between(fx, fy, fz, tx, ty, tz) -- rotation from one vector to another
+static int between(lua_State *state) {
+    const auto fx = static_cast<float>(luaL_checknumber(state, 1));
+    const auto fy = static_cast<float>(luaL_checknumber(state, 2));
+    const auto fz = static_cast<float>(luaL_checknumber(state, 3));
+    const auto tx = static_cast<float>(luaL_checknumber(state, 4));
+    const auto ty = static_cast<float>(luaL_checknumber(state, 5));
+    const auto tz = static_cast<float>(luaL_checknumber(state, 6));
+    *push(state) = Quaternion::between({fx, fy, fz}, {tx, ty, tz});
+    return 1;
+}
+
+// Quaternion.look(fx, fy, fz, ux, uy, uz) -- forward and up vectors
+static int look(lua_State *state) {
+    const auto fx = static_cast<float>(luaL_checknumber(state, 1));
+    const auto fy = static_cast<float>(luaL_checknumber(state, 2));
+    const auto fz = static_cast<float>(luaL_checknumber(state, 3));
+    const auto ux = static_cast<float>(luaL_optnumber(state, 4, 0.0));
+    const auto uy = static_cast<float>(luaL_optnumber(state, 5, 1.0));
+    const auto uz = static_cast<float>(luaL_optnumber(state, 6, 0.0));
+    *push(state) = Quaternion::look({fx, fy, fz}, {ux, uy, uz});
+    return 1;
+}
+
+// Quaternion.around(angle, ax, ay, az) -- angle in degrees, axis vector
+static int around(lua_State *state) {
+    const auto angle = static_cast<float>(luaL_checknumber(state, 1));
+    const auto ax    = static_cast<float>(luaL_checknumber(state, 2));
+    const auto ay    = static_cast<float>(luaL_checknumber(state, 3));
+    const auto az    = static_cast<float>(luaL_checknumber(state, 4));
+    *push(state) = Quaternion::around(angle, {ax, ay, az});
+    return 1;
+}
+
+// __index: quaternion.x, quaternion.y, quaternion.z, quaternion.w, quaternion:method()
+static int index(lua_State *state) {
     const Quaternion *quaternion = check(state, 1);
     const char *key = luaL_checkstring(state, 2);
 
-    if      (strcmp(key, "x")          == 0) { lua_pushnumber(state, quaternion->x); }
-    else if (strcmp(key, "y")          == 0) { lua_pushnumber(state, quaternion->y); }
-    else if (strcmp(key, "z")          == 0) { lua_pushnumber(state, quaternion->z); }
-    else if (strcmp(key, "w")          == 0) { lua_pushnumber(state, quaternion->w); }
-    else if (strcmp(key, "length")     == 0) { lua_pushnumber(state, quaternion->length()); }
-    else if (strcmp(key, "normalized") == 0) { push(state, quaternion->normalized()); }
-    else if (strcmp(key, "conjugate")  == 0) { push(state, quaternion->conjugate()); }
-    else if (strcmp(key, "inverse")    == 0) { push(state, quaternion->inverse()); }
-    else if (strcmp(key, "euler")      == 0) { pushVector3(state, quaternion->euler()); }
-    else {
-        luaL_getmetatable(state, "Quaternion");
-        lua_getfield(state, -1, key);
-        lua_remove(state, -2);
-    }
+    if (strcmp(key, "x") == 0) { lua_pushnumber(state, quaternion->x); }
+    if (strcmp(key, "y") == 0) { lua_pushnumber(state, quaternion->y); }
+    if (strcmp(key, "z") == 0) { lua_pushnumber(state, quaternion->z); }
+    if (strcmp(key, "w") == 0) { lua_pushnumber(state, quaternion->w); }
 
+    // fall back to metatable for methods
+    luaL_getmetatable(state, "Quaternion");
+    lua_pushvalue(state, 2);
+    lua_rawget(state, -2);
     return 1;
 }
 
-static int quaternion_add(lua_State *state) { push(state, *check(state, 1) + *check(state, 2)); return 1; }
-static int quaternion_sub(lua_State *state) { push(state, *check(state, 1) - *check(state, 2)); return 1; }
-static int quaternion_eq(lua_State *state)  { lua_pushboolean(state, *check(state, 1) == *check(state, 2)); return 1; }
+// __newindex: quaternion.x = 1.0 etc
+static int newindex(lua_State *state) {
+    Quaternion *quaternion = check(state, 1);
+    const char *key        = luaL_checkstring(state, 2);
+    const auto value       = static_cast<float>(luaL_checknumber(state, 3));
 
-static int quaternion_mul(lua_State *state) {
-    if (lua_isuserdata(state, 1) && lua_isuserdata(state, 2)) {
-        if (luaL_testudata(state, 2, "Vector3")) {
-            pushVector3(state, *check(state, 1) * *checkVector3(state, 2));
-        } else {
-            push(state, *check(state, 1) * *check(state, 2));
-        }
-    } else if (lua_isuserdata(state, 1)) {
-        push(state, *check(state, 1) * static_cast<float>(luaL_checknumber(state, 2)));
+    if (strcmp(key, "x") == 0) quaternion->x = value;
+    else if (strcmp(key, "y") == 0) quaternion->y = value;
+    else if (strcmp(key, "z") == 0) quaternion->z = value;
+    else if (strcmp(key, "w") == 0) quaternion->w = value;
+    else luaL_error(state, "Quaternion: unknown field '%s'", key);
+    return 0;
+}
+
+static int add(lua_State *state) {
+    const Quaternion *alpha = check(state, 1);
+    const Quaternion *beta  = check(state, 2);
+    *push(state) = *alpha + *beta;
+    return 1;
+}
+
+static int subtract(lua_State *state) {
+    const Quaternion *alpha = check(state, 1);
+    const Quaternion *beta  = check(state, 2);
+    *push(state) = *alpha - *beta;
+    return 1;
+}
+
+static int multiply(lua_State *state) {
+    const Quaternion *alpha = check(state, 1);
+    if (lua_isnumber(state, 2)) {
+        const auto scalar = static_cast<float>(lua_tonumber(state, 2));
+        *push(state) = *alpha * scalar;
     } else {
-        push(state, *check(state, 2) * static_cast<float>(luaL_checknumber(state, 1)));
+        const Quaternion *beta = check(state, 2);
+        *push(state) = *alpha * *beta;
     }
     return 1;
 }
 
-static int quaternion_dot(lua_State *state)         { lua_pushnumber(state, check(state, 1)->dot(*check(state, 2))); return 1; }
-static int quaternion_interpolate(lua_State *state) { push(state, check(state, 1)->interpolate(*check(state, 2), static_cast<float>(luaL_checknumber(state, 3)))); return 1; }
-
-static int quaternion_approximately(lua_State *state) {
-    const float epsilon = lua_isnumber(state, 3) ? static_cast<float>(lua_tonumber(state, 3)) : 1e-5f;
-    lua_pushboolean(state, check(state, 1)->approximately(*check(state, 2), epsilon));
+static int eq(lua_State *state) {
+    const Quaternion *alpha = check(state, 1);
+    const Quaternion *beta  = check(state, 2);
+    lua_pushboolean(state, *alpha == *beta);
     return 1;
 }
 
-static int quaternion_euler(lua_State *state) {
-    push(state, Quaternion::euler(*checkVector3(state, 1)));
-    return 1;
-}
-
-static int quaternion_between(lua_State *state) {
-    push(state, Quaternion::between(*checkVector3(state, 1), *checkVector3(state, 2)));
-    return 1;
-}
-
-static int quaternion_look(lua_State *state) {
-    if (lua_isuserdata(state, 2)) {
-        push(state, Quaternion::look(*checkVector3(state, 1), *checkVector3(state, 2)));
-    } else {
-        push(state, Quaternion::look(*checkVector3(state, 1)));
-    }
-    return 1;
-}
-
-static int quaternion_around(lua_State *state) {
-    push(state, Quaternion::around(
-        static_cast<float>(luaL_checknumber(state, 1)),
-        *checkVector3(state, 2)
-    ));
-    return 1;
-}
-
-static int quaternion_tostring(lua_State *state) {
+static int tostring(lua_State *state) {
     const Quaternion *quaternion = check(state, 1);
-    std::ostringstream oss;
-    oss << *quaternion;
-    lua_pushstring(state, oss.str().c_str());
+    lua_pushfstring(state, "Quaternion(%f, %f, %f, %f)", quaternion->x, quaternion->y, quaternion->z, quaternion->w);
     return 1;
 }
+
+static int length(lua_State *state) {
+    const Quaternion *quaternion = check(state, 1);
+    lua_pushnumber(state, static_cast<float>(quaternion->length()));
+    return 1;
+}
+
+static int dot(lua_State *state) {
+    const Quaternion *alpha = check(state, 1);
+    const Quaternion *beta  = check(state, 2);
+    lua_pushnumber(state, static_cast<float>(alpha->dot(*beta)));
+    return 1;
+}
+
+static int normalized(lua_State *state) {
+    const Quaternion *quaternion = check(state, 1);
+    *push(state) = quaternion->normalized();
+    return 1;
+}
+
+static int conjugate(lua_State *state) {
+    const Quaternion *quaternion = check(state, 1);
+    *push(state) = quaternion->conjugate();
+    return 1;
+}
+
+static int inverse(lua_State *state) {
+    const Quaternion *quaternion = check(state, 1);
+    *push(state) = quaternion->inverse();
+    return 1;
+}
+
+static int interpolate(lua_State *state) {
+    const Quaternion *alpha = check(state, 1);
+    const Quaternion *beta  = check(state, 2);
+    const auto factor      = static_cast<float>(luaL_checknumber(state, 3));
+    *push(state) = alpha->interpolate(*beta, factor);
+    return 1;
+}
+
+static int approximately(lua_State *state) {
+    const Quaternion *alpha = check(state, 1);
+    const Quaternion *beta  = check(state, 2);
+    const auto epsilon     = static_cast<float>(luaL_optnumber(state, 3, 1e-5));
+    lua_pushboolean(state, alpha->approximately(*beta, epsilon));
+    return 1;
+}
+
+// quaternion:euler() -- returns pitch, yaw, roll in degrees
+static int to_euler(lua_State *state) {
+    const Quaternion *quaternion = check(state, 1);
+    const Vector3 euler = quaternion->euler();
+    lua_pushnumber(state, euler.x);
+    lua_pushnumber(state, euler.y);
+    lua_pushnumber(state, euler.z);
+    return 3;
+}
+
+static const luaL_Reg methods[] = {
+    { "length",        length        },
+    { "dot",           dot           },
+    { "normalized",    normalized    },
+    { "conjugate",     conjugate     },
+    { "inverse",       inverse       },
+    { "interpolate",   interpolate   },
+    { "approximately", approximately },
+    { "euler",         to_euler      },
+    { nullptr, nullptr }
+};
+
+static const luaL_Reg functions[] = {
+    { "new",     new_       },
+    { "euler",   from_euler },
+    { "between", between    },
+    { "look",    look       },
+    { "around",  around     },
+    { nullptr, nullptr }
+};
 
 void register_quaternion(lua_State *state) {
     luaL_newmetatable(state, "Quaternion");
 
-    lua_pushcfunction(state, quaternion_tostring);    lua_setfield(state, -2, "__tostring");
-    lua_pushcfunction(state, quaternion_add);         lua_setfield(state, -2, "__add");
-    lua_pushcfunction(state, quaternion_sub);         lua_setfield(state, -2, "__sub");
-    lua_pushcfunction(state, quaternion_mul);         lua_setfield(state, -2, "__mul");
-    lua_pushcfunction(state, quaternion_eq);          lua_setfield(state, -2, "__eq");
-    lua_pushcfunction(state, quaternion_index);       lua_setfield(state, -2, "__index");
-    lua_pushcfunction(state, quaternion_dot);         lua_setfield(state, -2, "dot");
-    lua_pushcfunction(state, quaternion_interpolate); lua_setfield(state, -2, "interpolate");
-    lua_pushcfunction(state, quaternion_approximately);lua_setfield(state, -2, "approximately");
+    lua_pushcfunction(state, index);    lua_setfield(state, -2, "__index");
+    lua_pushcfunction(state, newindex); lua_setfield(state, -2, "__newindex");
+    lua_pushcfunction(state, add);      lua_setfield(state, -2, "__add");
+    lua_pushcfunction(state, subtract); lua_setfield(state, -2, "__sub");
+    lua_pushcfunction(state, multiply); lua_setfield(state, -2, "__mul");
+    lua_pushcfunction(state, eq);       lua_setfield(state, -2, "__eq");
+    lua_pushcfunction(state, tostring); lua_setfield(state, -2, "__tostring");
 
+    luaL_setfuncs(state, methods, 0);
     lua_pop(state, 1);
 
-    lua_newtable(state);
-    lua_pushcfunction(state, quaternion_new);     lua_setfield(state, -2, "new");
-    lua_pushcfunction(state, quaternion_euler);   lua_setfield(state, -2, "euler");
-    lua_pushcfunction(state, quaternion_between); lua_setfield(state, -2, "between");
-    lua_pushcfunction(state, quaternion_look);    lua_setfield(state, -2, "look");
-    lua_pushcfunction(state, quaternion_around);  lua_setfield(state, -2, "around");
+    luaL_newlib(state, functions);
 
-    push(state, Quaternion::IDENTITY); lua_setfield(state, -2, "identity");
+    auto *identity_const = static_cast<Quaternion *>(lua_newuserdata(state, sizeof(Quaternion)));
+    *identity_const = Quaternion::IDENTITY;
+    luaL_setmetatable(state, "Quaternion");
+    lua_setfield(state, -2, "IDENTITY");
 
     lua_setglobal(state, "Quaternion");
 }

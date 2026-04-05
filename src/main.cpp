@@ -5,8 +5,7 @@ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
-
-#include "bindings/vector3.hpp"
+#include "../include/bindings.hpp"
 #include <cstdio>
 
 static int print_func(lua_State *state) {
@@ -28,7 +27,14 @@ static int print_func(lua_State *state) {
 
 extern "C" void bridge_register(const Sandbox *sandbox) {
     lua_register(sandbox->state, "print", print_func);
+    register_vector2(sandbox->state);
     register_vector3(sandbox->state);
+    register_quaternion(sandbox->state);
+    register_matrix3(sandbox->state);
+    register_matrix4(sandbox->state);
+    register_transform(sandbox->state);
+    register_color3(sandbox->state);
+    register_color4(sandbox->state);
 }
 
 int main() {
@@ -39,44 +45,7 @@ int main() {
 
     bridge_register(sandbox);
 
-    sandbox_run(sandbox, R"(
-        local pos = Vector3.new(0, 10, 0)
-        print(pos)
-        print(pos.x)
-        print(pos.y)
-        print(pos.z)
-
-        local a = Vector3.new(1, 2, 3)
-        local b = Vector3.new(4, 5, 6)
-
-        print(a + b)
-        print(a - b)
-        print(a * 2)
-        print(a / 2)
-        print(-a)
-
-        print(a == b)
-        print(a ~= b)
-
-        print(a:length())
-        print(a:normalize())
-        print(a:distance(b))
-        print(a:dot(b))
-        print(a:cross(b))
-        print(a:lerp(b, 0.5))
-        print(a:angle(b))
-        print(a:abs())
-        print(a:clamp(Vector3.zero(), Vector3.one()))
-
-        print(Vector3.zero())
-        print(Vector3.one())
-        print(Vector3.up())
-        print(Vector3.down())
-        print(Vector3.left())
-        print(Vector3.right())
-        print(Vector3.forward())
-        print(Vector3.back())
-    )");
+    sandbox_run(sandbox, "tests/main.lua");
 
     sandbox_destroy(sandbox);
     return 0;
