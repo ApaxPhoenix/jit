@@ -1,3 +1,7 @@
-[submodule "vm"]
-	path = vm
+[submodule "vendor/luajit"]
+	path = vendor/luajit
+	url = https://github.com/LuaJIT/LuaJIT.git
+
+[submodule "vendor/vm"]
+	path = vendor/vm
 	url = https://github.com/ApaxPhoenix/Vm.git
