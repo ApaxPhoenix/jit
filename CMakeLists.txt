@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(polytoria CXX)
+project(jit CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 
@@ -22,15 +22,11 @@ file(GLOB_RECURSE HEADERS "include/*.hpp")
 
 add_executable(polytoria ${SOURCES} ${HEADERS})
 
-target_compile_definitions(vm PRIVATE
-        INIT_LUA_PATH="${CMAKE_SOURCE_DIR}/vendor/vm/init.lua"
-)
-
 target_include_directories(polytoria PRIVATE
         include
         vendor/vm/include
         vendor/vm/src
-        vendor/vm/luajit_install/include/luajit-2.1
+        vendor/vm/luajit_install/include/luajit-2.1=
 )
 
 target_link_libraries(polytoria PRIVATE vm)
